@@ -1,57 +1,56 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react"
 import axios from "axios";
-import Card from "./Card";
+import Card from "./Card"
 
 const CardPile = () => {
-  const [cards, setCards] = useState([]);
-  const [deckId, setDeckId] = useState(null);
+    const [cards, setCards] = useState([]);
+    const [drawing, setDrawing] = useState(false);
+    const deckIdRef = useRef(null);
+    const intervalIdRef = useRef(null);
 
-  useEffect(() => {
-    const shuffleDeck = async () => {
-      try {
-        const response = await axios.get(
-          "https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1"
-        );
-        setDeckId(response.data.deck_id);
-      } catch (error) {
-        console.error(error);
-      }
+    useEffect(() => {
+        async function shuffleDeck() {
+            const response = await axios.get("https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1");
+            deckIdRef.current = response.data.deck_id;
+        }
+        shuffleDeck();
+    }, []);
+
+    useEffect(() => {
+        async function drawCard() {
+            try {
+                const response = await axios.get(`https://deckofcardsapi.com/api/deck/${deckIdRef.current}/draw/?count=1`);
+                const card = response.data.cards[0];
+                setCards(oldCards => [...oldCards, card]);
+                if (response.data.remaining === 0) {
+                    setDrawing(false);
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        if (drawing && deckIdRef.current) {
+            intervalIdRef.current = setInterval(() => {
+                drawCard();
+            }, 1000);
+        }
+
+        return () => {
+            clearInterval(intervalIdRef.current);
+        };
+    }, [drawing]);
+
+    const handleDrawClick = () => {
+        setDrawing(oldDrawing => !oldDrawing);
     };
-    shuffleDeck();
-  }, []);
 
-  const drawCard = async () => {
-    try {
-      const response = await axios.get(
-        `https://deckofcardsapi.com/api/deck/${deckId}/draw/?count=1`
-      );
-      const card = response.data.cards[0];
-      setCards((prevCards) => [
-        ...prevCards,
-        { suit: card.suit, value: card.value },
-      ]);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+    return (
+        <div>
+            <button onClick={handleDrawClick} disabled={cards.length === 52}>{drawing ? "Stop drawing" : "Start drawing"}</button>
+            {cards.map(({suit, value}) => <Card suit={suit} value={value} />)}
+        </div>
+    )
+}
 
-  return (
-    <div>
-      {deckId ? (
-        <>
-          <button onClick={drawCard} disabled={cards.length === 52}>Draw a card!</button>
-          {cards.length > 0 ? (
-            cards.map(({ suit, value }) => <Card suit={suit} value={value} />)
-          ) : (
-            <p>No cards drawn yet.</p>
-          )}
-        </>
-      ) : (
-        <p>Loading...</p>
-      )}
-      {cards.length === 52 && <p>No more cards left.</p>}
-    </div>
-  );
-};
-
-export default CardPile;
+export default CardPile
